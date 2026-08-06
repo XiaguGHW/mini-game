@@ -193,7 +193,7 @@
     const BASE_FIRE_RATE = 180; // ms
     const BASE_BULLET_SPEED = 7;
     const BASE_BULLET_SIZE = 6;
-    const XP_PER_LEVEL = 100;
+    const XP_PER_LEVEL = 34; // 原 100，约 3 倍速度
     const MAX_HP = 3;
 
     // 马卡龙配色
@@ -820,6 +820,8 @@
         this.level++;
         this.attack++;
         this.bulletSizeMult += 0.08;
+        // 升级回满血
+        this.hp = this.maxHp;
         // 每 5 级稍微加快射速
         if (this.level % 5 === 0) this.fireRate = Math.max(60, this.fireRate - 10);
         updateUI();
