@@ -1177,6 +1177,7 @@
         div.addEventListener('click', () => {
           document.querySelectorAll('.character-option').forEach(o => o.classList.remove('selected'));
           div.classList.add('selected');
+          selectedChar = key;  // 关键：记录选中的角色
           startBtn.disabled = false;
         });
         characterSelect.appendChild(div);
