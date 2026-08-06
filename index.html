@@ -363,7 +363,7 @@
         ctx.ellipse(sx, sy, 2, 1.2, angle, 0, Math.PI * 2);
         ctx.fill();
       }
-      drawFace(ctx, x, y - r * 0.1, size, faceColor, expression);
+      // 去掉五官
     }
 
     function drawGrape(ctx, x, y, size, faceColor, expression) {
@@ -396,7 +396,7 @@
       ctx.beginPath();
       ctx.ellipse(x, y - r * 0.6, r * 0.3, r * 0.15, -0.3, 0, Math.PI * 2);
       ctx.fill();
-      drawFace(ctx, x, y - r * 0.05, size, faceColor, expression);
+      // 去掉五官
     }
 
     function drawWatermelon(ctx, x, y, size, faceColor, expression) {
@@ -430,7 +430,7 @@
         ctx.ellipse(sx, sy, 2.5, 1.5, angle + Math.PI / 2, 0, Math.PI * 2);
         ctx.fill();
       }
-      drawFace(ctx, x, y, size, faceColor, expression);
+      // 去掉五官
     }
 
     // ============ 敌人绘制 ============
