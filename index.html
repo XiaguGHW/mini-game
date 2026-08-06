@@ -195,6 +195,11 @@
     const BASE_BULLET_SIZE = 6;
     const XP_PER_LEVEL = 34; // 原 100，约 3 倍速度
     const MAX_HP = 3;
+    // 经验豆配置
+    const XP_ORB_BASE_VALUE = 5;
+    const XP_ORB_MAGNET_RANGE = 150;
+    const XP_ORB_MAX_SPEED = 8;
+    const XP_ORB_BASE_SPEED = 0.5;
 
     // 马卡龙配色
     const COLORS = {
@@ -236,6 +241,7 @@
     let running = false;
     let spawnTimer = 0;
     let lastFire = 0;
+    let xpOrbs = [];
 
     // UI 元素
     const levelDisplay = document.getElementById('level-display');
@@ -805,7 +811,8 @@
         this.level++;
         this.attack++;
         this.bulletSizeMult += 0.08;
-        // 升级回满血
+        // 升级加最大生命并回满
+        this.maxHp++;
         this.hp = this.maxHp;
         // 每 5 级稍微加快射速
         if (this.level % 5 === 0) this.fireRate = Math.max(60, this.fireRate - 10);
@@ -1000,6 +1007,22 @@
           type: 'death'
         });
       }
+      // 掉落经验豆
+      const orbCount = randInt(1, 3);
+      for (let i = 0; i < orbCount; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const speed = rand(1, 2);
+        xpOrbs.push({
+          x: x + Math.cos(angle) * 10,
+          y: y + Math.sin(angle) * 10,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          value: XP_ORB_BASE_VALUE,
+          size: 8,
+          life: 600, // 10秒后消失
+          collected: false
+        });
+      }
     }
 
     function updateParticles() {
@@ -1012,6 +1035,92 @@
         p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
+    }
+
+    // ============ 经验豆更新与绘制 ============
+    function updateXpOrbs() {
+      for (let i = xpOrbs.length - 1; i >= 0; i--) {
+        const orb = xpOrbs[i];
+        orb.life--;
+        
+        // 磁铁吸附逻辑
+        const dx = player.x - orb.x;
+        const dy = player.y - orb.y;
+        const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distToPlayer < XP_ORB_MAGNET_RANGE && distToPlayer > 0) {
+          // 距离越近吸力越大：开始慢，快到身边最快
+          const ratio = 1 - distToPlayer / XP_ORB_MAGNET_RANGE; // 0~1，越近越大
+          const pullSpeed = lerp(XP_ORB_BASE_SPEED, XP_ORB_MAX_SPEED, ratio * ratio); // 平方加速
+          orb.vx += (dx / distToPlayer) * pullSpeed;
+          orb.vy += (dy / distToPlayer) * pullSpeed;
+        }
+        
+        // 应用速度
+        orb.x += orb.vx;
+        orb.y += orb.vy;
+        orb.vx *= 0.95; // 阻力
+        orb.vy *= 0.95;
+        
+        // 碰撞检测：吃掉经验豆
+        if (distToPlayer < player.size * 0.6 + orb.size) {
+          player.addXp(orb.value);
+          // 吃豆粒子特效
+          for (let j = 0; j < 6; j++) {
+            const angle = rand(0, Math.PI * 2);
+            particles.push({
+              x: orb.x, y: orb.y,
+              vx: Math.cos(angle) * rand(1, 3),
+              vy: Math.sin(angle) * rand(1, 3),
+              size: rand(3, 5),
+              color: '#ffd166',
+              life: 20,
+              maxLife: 20,
+              type: 'hit'
+            });
+          }
+          xpOrbs.splice(i, 1);
+          continue;
+        }
+        
+        // 生命周期结束
+        if (orb.life <= 0) {
+          xpOrbs.splice(i, 1);
+        }
+      }
+    }
+
+    function drawXpOrbs() {
+      xpOrbs.forEach(orb => {
+        const alpha = Math.min(1, orb.life / 60); // 最后1秒闪烁
+        ctx.globalAlpha = orb.life < 60 ? (Math.sin(frame * 0.5) * 0.5 + 0.5) * alpha : alpha;
+        
+        // 经验豆：金黄色发光圆
+        const grad = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, orb.size);
+        grad.addColorStop(0, '#fff9c4');
+        grad.addColorStop(0.5, '#ffd166');
+        grad.addColorStop(1, '#f9c74f');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, orb.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 内部光点
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(orb.x - 2, orb.y - 2, orb.size * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 吸附范围指示（可选：靠近时显示微弱圆环）
+        if (player && dist(player.x, player.y, orb.x, orb.y) < XP_ORB_MAGNET_RANGE) {
+          ctx.strokeStyle = 'rgba(255, 209, 102, 0.15)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, orb.size * 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      });
+      ctx.globalAlpha = 1;
     }
 
     function drawParticles() {
@@ -1095,6 +1204,7 @@
       updateBullets();
       enemies.forEach(e => e.update());
       updateParticles();
+      updateXpOrbs();
       spawnEnemy();
 
       // 玩家碰撞检测
@@ -1110,6 +1220,7 @@
       // 绘制
       enemies.forEach(e => e.draw());
       drawBullets();
+      drawXpOrbs();
       drawParticles();
       player.draw();
 
@@ -1123,6 +1234,7 @@
       bullets = [];
       enemies = [];
       particles = [];
+      xpOrbs = [];
       frame = 0;
       lastFire = 0;
       running = true;
