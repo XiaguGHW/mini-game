@@ -633,22 +633,7 @@
     // ============ 背景装饰 ============
     function initDecorations() {
       decorations = [];
-      // 格子交叉点装饰
-      const gridSize = 40;
-      for (let gx = 0; gx < CANVAS_W; gx += gridSize) {
-        for (let gy = 0; gy < CANVAS_H; gy += gridSize) {
-          if (Math.random() < 0.15) {
-            const type = randInt(0, 2); // 0花 1樱桃 2糖果粒
-            decorations.push({
-              x: gx + rand(-8, 8),
-              y: gy + rand(-8, 8),
-              type,
-              scale: rand(0.6, 1.2),
-              phase: rand(0, Math.PI * 2)
-            });
-          }
-        }
-      }
+      // 不再生成细小装饰
     }
 
     function drawDecorations() {
@@ -708,7 +693,7 @@
           ctx.fillRect(x, y, gridSize, gridSize);
         }
       }
-      drawDecorations();
+      // 不再绘制细小装饰
     }
 
     // ============ 玩家类 ============
