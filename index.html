@@ -188,6 +188,8 @@
   <script>
     // ============ 配置常量 ============
     const CANVAS_W = 800, CANVAS_H = 600;
+    const WORLD_W = CANVAS_W * 9; // 7200
+    const WORLD_H = CANVAS_H * 9; // 5400
     const CENTER_X = CANVAS_W / 2, CENTER_Y = CANVAS_H / 2;
     const PLAYER_SPEED = 3.5;
     const BASE_FIRE_RATE = 180; // ms
@@ -242,6 +244,7 @@
     let spawnTimer = 0;
     let lastFire = 0;
     let xpOrbs = [];
+    let cameraX = 0, cameraY = 0;
 
     // UI 元素
     const levelDisplay = document.getElementById('level-display');
@@ -690,11 +693,19 @@
     // ============ 背景格子 ============
     function drawBackground() {
       const gridSize = 40;
-      const offset = (frame * 0.1) % gridSize;
-      // 格子
-      for (let x = -offset; x < CANVAS_W + offset; x += gridSize) {
-        for (let y = -offset; y < CANVAS_H + offset; y += gridSize) {
-          const isEven = (Math.floor((x + offset) / gridSize) + Math.floor((y + offset) / gridSize)) % 2 === 0;
+      // 可见世界区域
+      const left = cameraX;
+      const top = cameraY;
+      const right = cameraX + CANVAS_W;
+      const bottom = cameraY + CANVAS_H;
+      // 起始格子对齐
+      const startX = Math.floor(left / gridSize) * gridSize;
+      const startY = Math.floor(top / gridSize) * gridSize;
+      for (let x = startX; x < right; x += gridSize) {
+        for (let y = startY; y < bottom; y += gridSize) {
+          const gx = Math.floor(x / gridSize);
+          const gy = Math.floor(y / gridSize);
+          const isEven = (gx + gy) % 2 === 0;
           ctx.fillStyle = isEven ? COLORS.grid1 : COLORS.grid2;
           ctx.fillRect(x, y, gridSize, gridSize);
         }
@@ -708,8 +719,8 @@
         const char = CHARACTERS[charKey];
         this.charKey = charKey;
         this.char = char;
-        this.x = CENTER_X;
-        this.y = CENTER_Y;
+        this.x = WORLD_W / 2;
+        this.y = WORLD_H / 2;
         this.size = 40;
         this.hp = MAX_HP;
         this.maxHp = MAX_HP;
@@ -738,8 +749,8 @@
         }
         // 边界限制
         const margin = this.size;
-        this.x = clamp(this.x, margin, CANVAS_W - margin);
-        this.y = clamp(this.y, margin, CANVAS_H - margin);
+        this.x = clamp(this.x, margin, WORLD_W - margin);
+        this.y = clamp(this.y, margin, WORLD_H - margin);
 
         // 无敌帧
         if (this.invincible > 0) this.invincible--;
@@ -885,7 +896,7 @@
     ];
 
     class Enemy {
-      constructor(type, side) {
+      constructor(type, side, spawnX, spawnY) {
         this.type = type;
         this.size = type.size;
         this.maxHp = type.hp;
@@ -896,25 +907,30 @@
         this.hurt = 0;
         this.wobble = rand(0, Math.PI * 2);
 
-        // 从四边随机生成
-        const margin = 60;
-        switch (side) {
-          case 0: // 上
-            this.x = rand(margin, CANVAS_W - margin);
-            this.y = -margin;
-            break;
-          case 1: // 右
-            this.x = CANVAS_W + margin;
-            this.y = rand(margin, CANVAS_H - margin);
-            break;
-          case 2: // 下
-            this.x = rand(margin, CANVAS_W - margin);
-            this.y = CANVAS_H + margin;
-            break;
-          case 3: // 左
-            this.x = -margin;
-            this.y = rand(margin, CANVAS_H - margin);
-            break;
+        // 如果提供了坐标则使用，否则按旧逻辑从四边生成
+        if (spawnX !== undefined && spawnY !== undefined) {
+          this.x = spawnX;
+          this.y = spawnY;
+        } else {
+          const margin = 60;
+          switch (side) {
+            case 0:
+              this.x = rand(margin, CANVAS_W - margin);
+              this.y = -margin;
+              break;
+            case 1:
+              this.x = CANVAS_W + margin;
+              this.y = rand(margin, CANVAS_H - margin);
+              break;
+            case 2:
+              this.x = rand(margin, CANVAS_W - margin);
+              this.y = CANVAS_H + margin;
+              break;
+            case 3:
+              this.x = -margin;
+              this.y = rand(margin, CANVAS_H - margin);
+              break;
+          }
         }
       }
 
@@ -1150,8 +1166,13 @@
       if (frame % spawnInterval === 0) {
         // 生成数量随等级增加
         const count = 1 + Math.floor(player.level / 3) + (levelFactor > 1 ? 1 : 0);
+        // 相机可见区域外边缘
+        const margin = 80;
+        const left = cameraX - margin;
+        const right = cameraX + CANVAS_W + margin;
+        const top = cameraY - margin;
+        const bottom = cameraY + CANVAS_H + margin;
         for (let i = 0; i < count; i++) {
-          // 加权随机选择敌人类型
           const totalWeight = ENEMY_TYPES.reduce((sum, t) => sum + t.spawnWeight, 0);
           let r = rand(0, totalWeight);
           let chosen = ENEMY_TYPES[0];
@@ -1159,24 +1180,60 @@
             r -= t.spawnWeight;
             if (r <= 0) { chosen = t; break; }
           }
+          // 随机选择四边之一
           const side = randInt(0, 3);
-          // 错开生成位置
+          let ex, ey;
+          switch (side) {
+            case 0: // 上
+              ex = rand(left, right);
+              ey = top;
+              break;
+            case 1: // 右
+              ex = right;
+              ey = rand(top, bottom);
+              break;
+            case 2: // 下
+              ex = rand(left, right);
+              ey = bottom;
+              break;
+            case 3: // 左
+              ex = left;
+              ey = rand(top, bottom);
+              break;
+          }
+          // 错开生成
           setTimeout(() => {
-            if (running) enemies.push(new Enemy(chosen, side));
+            if (running) {
+              const enemy = new Enemy(chosen, 0, ex, ey);
+              enemies.push(enemy);
+            }
           }, i * 80);
         }
       }
       
       // 精英/大型敌人：每 20 级概率生成强化版
       if (player.level >= 5 && frame % 3000 === 0) {
+        const margin = 80;
+        const left = cameraX - margin;
+        const right = cameraX + CANVAS_W + margin;
+        const top = cameraY - margin;
+        const bottom = cameraY + CANVAS_H + margin;
         const side = randInt(0, 3);
+        let ex, ey;
+        switch (side) {
+          case 0: ex = rand(left, right); ey = top; break;
+          case 1: ex = right; ey = rand(top, bottom); break;
+          case 2: ex = rand(left, right); ey = bottom; break;
+          case 3: ex = left; ey = rand(top, bottom); break;
+        }
         const eliteType = { ...choice(ENEMY_TYPES.filter(t => t.hp >= 2)) };
         eliteType.hp = Math.ceil(eliteType.hp * 1.5);
         eliteType.speed *= 1.2;
         eliteType.size *= 1.2;
         eliteType.score *= 2;
         eliteType.spawnWeight = 1;
-        enemies.push(new Enemy(eliteType, side));
+        const enemy = new Enemy(eliteType, 0, ex, ey);
+        enemies.push(enemy);
       }
     }
 
@@ -1194,10 +1251,6 @@
     function gameLoop() {
       if (!running) return;
       frame++;
-
-      // 清屏
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      drawBackground();
 
       // 更新
       player.update();
@@ -1217,12 +1270,23 @@
         }
       });
 
-      // 绘制
+      // 计算相机：跟随玩家，保持在画面中心，直到地图边界
+      cameraX = clamp(player.x - CANVAS_W / 2, 0, WORLD_W - CANVAS_W);
+      cameraY = clamp(player.y - CANVAS_H / 2, 0, WORLD_H - CANVAS_H);
+
+      // 清屏
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.save();
+      ctx.translate(-cameraX, -cameraY);
+      drawBackground();
+
+      // 绘制世界对象
       enemies.forEach(e => e.draw());
       drawBullets();
       drawXpOrbs();
       drawParticles();
       player.draw();
+      ctx.restore();
 
       requestAnimationFrame(gameLoop);
     }
@@ -1237,6 +1301,8 @@
       xpOrbs = [];
       frame = 0;
       lastFire = 0;
+      cameraX = clamp(player.x - CANVAS_W / 2, 0, WORLD_W - CANVAS_W);
+      cameraY = clamp(player.y - CANVAS_H / 2, 0, WORLD_H - CANVAS_H);
       running = true;
       
       startScreen.classList.add('hidden');
