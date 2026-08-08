@@ -70,10 +70,12 @@
       this.enemies = this.physics.add.group();
       this.bullets = this.physics.add.group();
       this.xpOrbs = this.add.group();
+      this.particles = this.add.group();
       this.stats = this.newStats();
       this.lastFireAt = 0;
       this.lastDamageAt = -Infinity;
       this.spawnAccumulator = 0;
+      this.enemySerial = 0;
       this.running = true;
 
       const strawberry = this.characterKey === 'strawberry';
@@ -120,6 +122,7 @@
       this.moveEnemies(delta);
       this.updateBullets(time);
       this.updateXpOrbs(delta);
+      this.updateParticles(time, delta);
       this.tryFire(time);
       this.spawnAccumulator += delta;
       const spawnDelay = Math.max(280, 920 - this.stats.level * 32);
@@ -168,6 +171,7 @@
           return;
         }
         this.physics.moveToObject(enemy, this.player, type.speed);
+        enemy.setAngle(Math.sin(this.time.now * 0.005 + enemy.getData('wobbleOffset')) * 2);
         this.drawEnemyHealthBar(enemy);
       });
     }
@@ -178,7 +182,8 @@
       if (!target) return;
       this.lastFireAt = time;
       const character = Data.characters[this.characterKey];
-      const bullet = this.bullets.create(this.player.x, this.player.y, 'spark');
+      const bullet = this.getBullet(this.player.x, this.player.y);
+      if (!bullet) return;
       const radius = character.bulletSize * this.stats.bulletMultiplier;
       bullet.setDisplaySize(radius * 2, radius * 2).setTint(character.accent).setDepth(2);
       bullet.setData({ expiresAt: time + 1450, damage: this.stats.attack, target });
@@ -200,18 +205,35 @@
       this.bullets.getChildren().forEach(bullet => {
         if (!bullet.active) return;
         if (bullet.getData('expiresAt') <= time) {
-          bullet.destroy();
+          this.recycleBullet(bullet);
           return;
         }
         const target = bullet.getData('target');
         if (!target?.active) {
-          bullet.destroy();
+          this.recycleBullet(bullet);
           return;
         }
         this.physics.moveToObject(bullet, target, Data.player.bulletSpeed);
         const reach = target.getData('hitRadius') + bullet.displayWidth * 0.5;
         if (Phaser.Math.Distance.Between(bullet.x, bullet.y, target.x, target.y) <= reach) this.handleBulletHit(bullet, target);
       });
+    }
+
+    getBullet(x, y) {
+      let bullet = this.bullets.getFirstDead(false);
+      if (!bullet && this.bullets.getChildren().length >= Data.performance.maxBullets) return null;
+      if (!bullet) {
+        bullet = this.physics.add.sprite(x, y, 'spark');
+        this.bullets.add(bullet);
+      } else {
+        bullet.enableBody(true, x, y, true, true).setTexture('spark');
+      }
+      return bullet.setActive(true).setVisible(true).setAlpha(1).setPosition(x, y);
+    }
+
+    recycleBullet(bullet) {
+      if (!bullet?.active) return;
+      bullet.setVelocity(0, 0).disableBody(true, true);
     }
 
     spawnWave() {
@@ -239,7 +261,8 @@
       if (side === 3) { x = camera.left - margin; y = Phaser.Math.Between(camera.top, camera.bottom); }
       const levelHp = type.hp + Math.floor((this.stats.level - 1) / 4);
       const eliteMultiplier = isElite ? 1.6 : 1;
-      const enemy = this.enemies.create(x, y, `enemy-art-${type.key}`);
+      const enemy = this.getEnemy(x, y, type.key);
+      if (!enemy) return;
       const visualSize = type.radius * 2 + 28;
       const visualMultiplier = isElite ? 1.25 : 1;
       const colliderRadius = Math.round((type.radius - 2) * 192 / visualSize);
@@ -250,7 +273,7 @@
         .setAngle(-3);
       const baseScale = enemy.scaleX;
       const maxHp = Math.ceil(levelHp * eliteMultiplier);
-      const healthBar = this.add.graphics().setDepth(4);
+      const healthBar = enemy.getData('healthBar');
       enemy.setData({
         type: { ...type, speed: type.speed * (isElite ? 1.15 : 1), score: Math.round(type.score * eliteMultiplier) },
         hp: maxHp,
@@ -259,11 +282,25 @@
         elite: isElite,
         baseScale,
         healthBar,
-        healthVisibleUntil: 0
+        healthVisibleUntil: 0,
+        wobbleOffset: Phaser.Math.FloatBetween(0, Phaser.Math.PI2),
+        spawnId: ++this.enemySerial
       });
       if (isElite) enemy.setTint(0xffd166);
-      this.tweens.add({ targets: enemy, scaleX: baseScale * 1.045, scaleY: baseScale * 0.965, angle: 3, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       this.drawEnemyHealthBar(enemy);
+    }
+
+    getEnemy(x, y, typeKey) {
+      let enemy = this.enemies.getFirstDead(false);
+      if (!enemy && this.enemies.getChildren().length >= Data.performance.maxActiveEnemies) return null;
+      if (!enemy) {
+        enemy = this.physics.add.sprite(x, y, `enemy-art-${typeKey}`);
+        enemy.setData('healthBar', this.add.graphics().setDepth(4));
+        this.enemies.add(enemy);
+      } else {
+        enemy.enableBody(true, x, y, true, true).setTexture(`enemy-art-${typeKey}`);
+      }
+      return enemy.setActive(true).setVisible(true).setAlpha(1).setPosition(x, y).setVelocity(0, 0).setFlipX(false).setAngle(0).clearTint();
     }
 
     activeEnemyCount() {
@@ -287,13 +324,14 @@
 
     handleBulletHit(bullet, enemy) {
       if (!bullet.active || !enemy.active) return;
-      bullet.destroy();
+      this.recycleBullet(bullet);
       const currentHp = Number(enemy.getData('hp')) || 0;
       const damage = Number(bullet.getData('damage')) || 1;
       const hp = Math.max(0, currentHp - damage);
       enemy.setData('hp', hp).setData('healthVisibleUntil', this.time.now + Data.performance.healthBarDuration).setTintFill(0xffffff);
+      const spawnId = enemy.getData('spawnId');
       this.time.delayedCall(65, () => {
-        if (!enemy.active) return;
+        if (!enemy.active || enemy.getData('spawnId') !== spawnId) return;
         if (enemy.getData('elite')) enemy.setTint(0xffd166);
         else enemy.clearTint();
       });
@@ -331,26 +369,78 @@
       this.stats.score += type.score;
       this.createBurst(enemy.x, enemy.y, type.color, 14);
       this.dropXp(enemy.x, enemy.y, Math.max(1, Math.ceil(type.score / 10)));
-      this.tweens.killTweensOf(enemy);
-      enemy.getData('healthBar')?.destroy();
-      enemy.destroy();
+      this.recycleEnemy(enemy);
       this.publishHud();
     }
 
     removeEnemy(enemy) {
       if (!enemy.active) return;
+      this.recycleEnemy(enemy);
+    }
+
+    recycleEnemy(enemy) {
+      if (!enemy?.active) return;
       this.tweens.killTweensOf(enemy);
-      enemy.getData('healthBar')?.destroy();
-      enemy.destroy();
+      enemy.getData('healthBar')?.clear().setVisible(false);
+      enemy.setVelocity(0, 0).disableBody(true, true);
     }
 
     dropXp(x, y, count) {
       for (let index = 0; index < count; index += 1) {
-        const orb = this.add.sprite(x, y, 'xp-orb').setDepth(1);
+        const nearbyOrb = this.findXpOrbNear(x, y);
+        if (nearbyOrb) {
+          this.addXpToOrb(nearbyOrb, 5);
+          continue;
+        }
+        const orb = this.getXpOrb(x, y);
+        if (!orb) {
+          this.mergeXpValue(x, y, 5);
+          continue;
+        }
         const angle = Phaser.Math.FloatBetween(0, Phaser.Math.PI2);
         orb.setData({ value: 5, vx: Math.cos(angle) * Phaser.Math.Between(80, 150), vy: Math.sin(angle) * Phaser.Math.Between(80, 150) });
+      }
+    }
+
+    getXpOrb(x, y) {
+      let orb = this.xpOrbs.getFirstDead(false);
+      if (!orb && this.xpOrbs.getChildren().length >= Data.performance.maxXpOrbs) return null;
+      if (!orb) {
+        orb = this.add.sprite(x, y, 'xp-orb').setDepth(1);
         this.xpOrbs.add(orb);
       }
+      return orb.setActive(true).setVisible(true).setAlpha(1).setScale(1).setPosition(x, y);
+    }
+
+    findXpOrbNear(x, y) {
+      return this.xpOrbs.getChildren().find(orb => (
+        orb.active && Phaser.Math.Distance.Between(x, y, orb.x, orb.y) <= Data.performance.xpMergeDistance
+      ));
+    }
+
+    addXpToOrb(orb, value) {
+      const mergedValue = orb.getData('value') + value;
+      orb.setData('value', mergedValue).setScale(Math.min(1.45, 1 + mergedValue / 100));
+    }
+
+    mergeXpValue(x, y, value) {
+      let nearest = this.findXpOrbNear(x, y);
+      let nearestDistance = Infinity;
+      this.xpOrbs.getChildren().forEach(orb => {
+        if (!orb.active) return;
+        const distance = Phaser.Math.Distance.Between(x, y, orb.x, orb.y);
+        if (!nearest || distance < nearestDistance) {
+          nearest = orb;
+          nearestDistance = distance;
+        }
+      });
+      if (!nearest) return;
+      this.addXpToOrb(nearest, value);
+    }
+
+    recycleXpOrb(orb) {
+      if (!orb?.active) return;
+      orb.setActive(false).setVisible(false).setAlpha(1).setScale(1);
     }
 
     updateXpOrbs(delta) {
@@ -370,7 +460,7 @@
         orb.setData({ vx, vy }).setPosition(orb.x + vx * dt, orb.y + vy * dt);
         if (distance < 30) {
           const value = orb.getData('value');
-          orb.destroy();
+          this.recycleXpOrb(orb);
           this.gainXp(value);
         }
       });
@@ -411,11 +501,42 @@
 
     createBurst(x, y, color, count) {
       for (let index = 0; index < count; index += 1) {
-        const spark = this.add.sprite(x, y, 'spark').setTint(color).setDepth(5);
+        const spark = this.getParticle(x, y);
+        if (!spark) return;
         const angle = Phaser.Math.FloatBetween(0, Phaser.Math.PI2);
         const length = Phaser.Math.Between(16, 46);
-        this.tweens.add({ targets: spark, x: x + Math.cos(angle) * length, y: y + Math.sin(angle) * length, alpha: 0, scale: Phaser.Math.FloatBetween(0.2, 0.7), duration: Phaser.Math.Between(180, 320), ease: 'Quad.out', onComplete: () => spark.destroy() });
+        const duration = Phaser.Math.Between(180, 320);
+        spark.setTint(color).setDepth(5).setScale(Phaser.Math.FloatBetween(0.2, 0.7)).setData({
+          vx: Math.cos(angle) * length / (duration / 1000),
+          vy: Math.sin(angle) * length / (duration / 1000),
+          expiresAt: this.time.now + duration,
+          duration
+        });
       }
+    }
+
+    getParticle(x, y) {
+      let particle = this.particles.getFirstDead(false);
+      if (!particle && this.particles.getChildren().length >= Data.performance.maxParticles) return null;
+      if (!particle) {
+        particle = this.add.sprite(x, y, 'spark');
+        this.particles.add(particle);
+      }
+      return particle.setActive(true).setVisible(true).setAlpha(1).setPosition(x, y);
+    }
+
+    updateParticles(time, delta) {
+      const dt = delta / 1000;
+      this.particles.getChildren().forEach(particle => {
+        if (!particle.active) return;
+        const remaining = particle.getData('expiresAt') - time;
+        if (remaining <= 0) {
+          particle.setActive(false).setVisible(false).setAlpha(1);
+          return;
+        }
+        particle.setPosition(particle.x + particle.getData('vx') * dt, particle.y + particle.getData('vy') * dt);
+        particle.setAlpha(remaining / particle.getData('duration'));
+      });
     }
 
     finishRun() {

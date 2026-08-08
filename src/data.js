@@ -9,7 +9,11 @@
       maxActiveEnemies: 54,
       enemyDespawnDistance: 1728,
       healthBarRange: 320,
-      healthBarDuration: 900
+      healthBarDuration: 900,
+      maxBullets: 28,
+      maxXpOrbs: 72,
+      maxParticles: 110,
+      xpMergeDistance: 140
     },
     player: {
       speed: 250,
