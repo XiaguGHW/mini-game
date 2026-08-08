@@ -1,0 +1,59 @@
+:root {
+  --ink: #4b3d3a;
+  --muted-ink: #796b68;
+  --berry: #b85d73;
+  --berry-soft: #f2dce2;
+  --cream: #f7f2ea;
+  --panel: rgba(255, 252, 247, 0.9);
+  --line: rgba(112, 82, 74, 0.14);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--ink);
+  font-family: ui-rounded, "Nunito", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: radial-gradient(circle at top, #fffaf2 0%, var(--cream) 55%, #eee3d6 100%);
+}
+button { font: inherit; }
+.game-shell { width: min(1040px, 100%); margin: 0 auto; padding: 20px 18px 28px; position: relative; }
+.game-header { text-align: center; margin-bottom: 14px; }
+.eyebrow { margin: 0 0 5px; color: var(--berry); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.16em; }
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 5px; font-size: clamp(1.7rem, 4vw, 2.35rem); letter-spacing: -0.05em; }
+h2 { margin-bottom: 8px; font-size: clamp(1.45rem, 3vw, 1.9rem); letter-spacing: -0.04em; }
+.subtitle, .overlay-copy { color: var(--muted-ink); line-height: 1.55; }
+.hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(180px, 1.55fr); gap: 9px; margin-bottom: 12px; }
+.stat-card, .xp-card {
+  min-height: 59px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--panel); box-shadow: 0 10px 24px rgba(88, 62, 55, 0.08), inset 0 1px 0 rgba(255,255,255,.85);
+}
+.stat-card span, .xp-label { display: block; color: var(--muted-ink); font-size: 0.72rem; font-weight: 700; }
+.stat-card strong { display: block; margin-top: 3px; font-size: 1.12rem; }
+.xp-label { display: flex; justify-content: space-between; gap: 8px; }
+.xp-track { height: 9px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: #eadfd5; }
+.xp-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #d79958, #c46877); transition: width .16s ease-out; }
+.game-frame { width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: #f4ede5; box-shadow: 0 18px 42px rgba(88, 62, 55, 0.15); }
+.game-frame canvas { display: block; width: 100% !important; height: 100% !important; }
+.overlay-card {
+  position: absolute; z-index: 2; left: 50%; top: 50%; width: min(560px, calc(100% - 36px)); padding: 28px;
+  text-align: center; transform: translate(-50%, -10%); border: 1px solid rgba(255,255,255,.9); border-radius: 25px;
+  background: rgba(255, 252, 247, .96); box-shadow: 0 26px 70px rgba(70, 46, 40, .22);
+}
+.hidden { display: none; }
+.character-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+.character-button { min-height: 132px; padding: 13px 8px; border: 1px solid var(--line); border-radius: 18px; color: var(--ink); background: #fffdfa; cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.character-button:hover, .character-button.selected { transform: translateY(-3px); border-color: var(--berry); box-shadow: 0 12px 20px rgba(120, 76, 87, .13); }
+.character-icon { display: block; margin-bottom: 7px; font-size: 2.55rem; }
+.character-name { display: block; font-weight: 800; }
+.character-desc { display: block; margin-top: 4px; color: var(--muted-ink); font-size: .72rem; line-height: 1.35; }
+.primary-button { padding: 12px 28px; border: 0; border-radius: 999px; color: #fff; font-weight: 800; cursor: pointer; background: linear-gradient(135deg, #c86b80, #ab526a); box-shadow: 0 7px 0 #91475b, 0 12px 22px rgba(152, 70, 91, .28); transition: transform .12s ease, box-shadow .12s ease; }
+.primary-button:hover { transform: translateY(-2px); box-shadow: 0 9px 0 #91475b, 0 15px 25px rgba(152, 70, 91, .28); }
+.primary-button:active { transform: translateY(3px); box-shadow: 0 4px 0 #91475b; }
+.primary-button:disabled { cursor: default; opacity: .46; transform: none; box-shadow: none; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 20px 0; }
+.result-grid div { padding: 12px 6px; border-radius: 14px; background: #f8f1e9; }
+.result-grid span { display: block; color: var(--muted-ink); font-size: .75rem; }
+.result-grid strong { display: block; margin-top: 3px; font-size: 1.35rem; }
+@media (max-width: 720px) { .game-shell { padding: 14px 10px 20px; } .hud { grid-template-columns: repeat(2, 1fr); } .xp-card { grid-column: span 2; } .game-frame { border-radius: 18px; } .overlay-card { padding: 22px 15px; transform: translate(-50%, -4%); } }
