@@ -52,7 +52,7 @@
       this.player = this.physics.add.sprite(Data.world.width / 2, Data.world.height / 2, `player-${this.characterKey}`);
       this.player.setCircle(21, 3, 3).setCollideWorldBounds(true).setDepth(3);
       this.player.setData('baseScale', 1);
-      this.cameras.main.startFollow(this.player, true, 0.11, 0.11);
+      this.cameras.main.startFollow(this.player, true, 1, 1);
       this.cameras.main.setBounds(0, 0, Data.world.width, Data.world.height);
       this.cameras.main.setBackgroundColor('#f4ede5');
 
