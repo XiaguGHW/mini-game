@@ -92,8 +92,8 @@
       game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: 'game-frame',
-        width: 960,
-        height: 720,
+        width: Data.viewport.width,
+        height: Data.viewport.height,
         backgroundColor: '#f4ede5',
         physics: { default: 'arcade', arcade: { debug: false } },
         scene: []
