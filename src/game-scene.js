@@ -96,8 +96,8 @@
     }
 
     movePlayer() {
-      let x = 0;
-      let y = 0;
+      let x = window.GameInput.x;
+      let y = window.GameInput.y;
       if (this.cursors.left.isDown || this.wasd.left.isDown) x -= 1;
       if (this.cursors.right.isDown || this.wasd.right.isDown) x += 1;
       if (this.cursors.up.isDown || this.wasd.up.isDown) y -= 1;
