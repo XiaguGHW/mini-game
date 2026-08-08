@@ -68,6 +68,7 @@
       this.add.tileSprite(0, 0, Data.world.width, Data.world.height, 'ground').setOrigin(0);
 
       this.enemies = this.physics.add.group();
+      this.lightEnemies = this.add.group();
       this.bullets = this.physics.add.group();
       this.xpOrbs = this.add.group();
       this.particles = this.add.group();
@@ -76,6 +77,7 @@
       this.lastDamageAt = -Infinity;
       this.spawnAccumulator = 0;
       this.enemySerial = 0;
+      this.lightEnemyAccumulator = 0;
       this.running = true;
 
       const strawberry = this.characterKey === 'strawberry';
@@ -120,6 +122,7 @@
       if (!this.running) return;
       this.movePlayer();
       this.moveEnemies(delta);
+      this.moveLightEnemies(delta);
       this.updateBullets(time);
       this.updateXpOrbs(delta);
       this.updateParticles(time, delta);
@@ -170,9 +173,37 @@
           this.removeEnemy(enemy);
           return;
         }
+        if (distance > Data.performance.enemyDemotionDistance) {
+          this.demoteEnemy(enemy);
+          return;
+        }
         this.physics.moveToObject(enemy, this.player, type.speed);
         enemy.setAngle(Math.sin(this.time.now * 0.005 + enemy.getData('wobbleOffset')) * 2);
         this.drawEnemyHealthBar(enemy);
+      });
+    }
+
+    moveLightEnemies(delta) {
+      this.lightEnemyAccumulator += delta;
+      if (this.lightEnemyAccumulator < Data.performance.lightEnemyUpdateInterval) return;
+      const dt = this.lightEnemyAccumulator / 1000;
+      this.lightEnemyAccumulator = 0;
+      this.lightEnemies.getChildren().forEach(enemy => {
+        if (!enemy.active) return;
+        const dx = this.player.x - enemy.x;
+        const dy = this.player.y - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance > Data.performance.enemyDespawnDistance) {
+          this.recycleLightEnemy(enemy);
+          return;
+        }
+        if (distance <= Data.performance.enemyPromotionDistance) {
+          this.promoteLightEnemy(enemy);
+          return;
+        }
+        const type = enemy.getData('type');
+        enemy.setPosition(enemy.x + dx / distance * type.speed * dt, enemy.y + dy / distance * type.speed * dt);
+        enemy.setAngle(Math.sin(this.time.now * 0.005 + enemy.getData('wobbleOffset')) * 2);
       });
     }
 
@@ -259,12 +290,30 @@
       if (side === 1) { x = camera.right + margin; y = Phaser.Math.Between(camera.top, camera.bottom); }
       if (side === 2) { x = Phaser.Math.Between(camera.left, camera.right); y = camera.bottom + margin; }
       if (side === 3) { x = camera.left - margin; y = Phaser.Math.Between(camera.top, camera.bottom); }
+      const state = this.createEnemyState(type, isElite);
+      this.activateLightEnemy(x, y, state);
+    }
+
+    createEnemyState(type, isElite) {
       const levelHp = type.hp + Math.floor((this.stats.level - 1) / 4);
       const eliteMultiplier = isElite ? 1.6 : 1;
-      const enemy = this.getEnemy(x, y, type.key);
-      if (!enemy) return;
+      return {
+        type: { ...type, speed: type.speed * (isElite ? 1.15 : 1), score: Math.round(type.score * eliteMultiplier) },
+        hp: Math.ceil(levelHp * eliteMultiplier),
+        maxHp: Math.ceil(levelHp * eliteMultiplier),
+        elite: isElite,
+        healthVisibleUntil: 0,
+        wobbleOffset: Phaser.Math.FloatBetween(0, Phaser.Math.PI2),
+        spawnId: ++this.enemySerial
+      };
+    }
+
+    activateFullEnemy(x, y, state) {
+      const enemy = this.getEnemy(x, y, state.type.key);
+      if (!enemy) return null;
+      const type = state.type;
       const visualSize = type.radius * 2 + 28;
-      const visualMultiplier = isElite ? 1.25 : 1;
+      const visualMultiplier = state.elite ? 1.25 : 1;
       const colliderRadius = Math.round((type.radius - 2) * 192 / visualSize);
       const colliderOffset = 96 - colliderRadius;
       enemy.setDisplaySize(visualSize * visualMultiplier, visualSize * visualMultiplier)
@@ -272,27 +321,40 @@
         .setDepth(2)
         .setAngle(-3);
       const baseScale = enemy.scaleX;
-      const maxHp = Math.ceil(levelHp * eliteMultiplier);
       const healthBar = enemy.getData('healthBar');
       enemy.setData({
-        type: { ...type, speed: type.speed * (isElite ? 1.15 : 1), score: Math.round(type.score * eliteMultiplier) },
-        hp: maxHp,
-        maxHp,
+        ...state,
         hitRadius: type.radius * visualMultiplier,
-        elite: isElite,
         baseScale,
         healthBar,
-        healthVisibleUntil: 0,
-        wobbleOffset: Phaser.Math.FloatBetween(0, Phaser.Math.PI2),
-        spawnId: ++this.enemySerial
+        isLight: false
       });
-      if (isElite) enemy.setTint(0xffd166);
+      if (state.elite) enemy.setTint(0xffd166);
       this.drawEnemyHealthBar(enemy);
+      return enemy;
+    }
+
+    activateLightEnemy(x, y, state) {
+      let enemy = this.lightEnemies.getFirstDead(false);
+      if (!enemy && this.lightEnemies.getChildren().length >= Data.performance.maxLightEnemies) return null;
+      if (!enemy) {
+        enemy = this.add.sprite(x, y, `enemy-art-${state.type.key}`);
+        this.lightEnemies.add(enemy);
+      } else {
+        enemy.setTexture(`enemy-art-${state.type.key}`);
+      }
+      const visualSize = state.type.radius * 2 + 28;
+      const visualMultiplier = state.elite ? 1.25 : 1;
+      enemy.setActive(true).setVisible(true).setAlpha(1).setPosition(x, y)
+        .setDisplaySize(visualSize * visualMultiplier, visualSize * visualMultiplier)
+        .setDepth(2).setAngle(0).clearTint().setData({ ...state, isLight: true });
+      if (state.elite) enemy.setTint(0xffd166);
+      return enemy;
     }
 
     getEnemy(x, y, typeKey) {
       let enemy = this.enemies.getFirstDead(false);
-      if (!enemy && this.enemies.getChildren().length >= Data.performance.maxActiveEnemies) return null;
+      if (!enemy && this.enemies.getChildren().length >= Data.performance.maxFullEnemies) return null;
       if (!enemy) {
         enemy = this.physics.add.sprite(x, y, `enemy-art-${typeKey}`);
         enemy.setData('healthBar', this.add.graphics().setDepth(4));
@@ -304,7 +366,8 @@
     }
 
     activeEnemyCount() {
-      return this.enemies.getChildren().reduce((count, enemy) => count + Number(enemy.active), 0);
+      return this.enemies.getChildren().reduce((count, enemy) => count + Number(enemy.active), 0)
+        + this.lightEnemies.getChildren().reduce((count, enemy) => count + Number(enemy.active), 0);
     }
 
     getEnemyLimit() {
@@ -378,11 +441,40 @@
       this.recycleEnemy(enemy);
     }
 
+    enemyState(enemy) {
+      return {
+        type: enemy.getData('type'),
+        hp: enemy.getData('hp'),
+        maxHp: enemy.getData('maxHp'),
+        elite: enemy.getData('elite'),
+        healthVisibleUntil: enemy.getData('healthVisibleUntil'),
+        wobbleOffset: enemy.getData('wobbleOffset'),
+        spawnId: enemy.getData('spawnId')
+      };
+    }
+
+    promoteLightEnemy(lightEnemy) {
+      if (!lightEnemy.active) return;
+      const fullEnemy = this.activateFullEnemy(lightEnemy.x, lightEnemy.y, this.enemyState(lightEnemy));
+      if (fullEnemy) this.recycleLightEnemy(lightEnemy);
+    }
+
+    demoteEnemy(enemy) {
+      if (!enemy.active) return;
+      const lightEnemy = this.activateLightEnemy(enemy.x, enemy.y, this.enemyState(enemy));
+      if (lightEnemy) this.recycleEnemy(enemy);
+    }
+
     recycleEnemy(enemy) {
       if (!enemy?.active) return;
       this.tweens.killTweensOf(enemy);
       enemy.getData('healthBar')?.clear().setVisible(false);
       enemy.setVelocity(0, 0).disableBody(true, true);
+    }
+
+    recycleLightEnemy(enemy) {
+      if (!enemy?.active) return;
+      enemy.setActive(false).setVisible(false).setAlpha(1).setAngle(0).clearTint();
     }
 
     dropXp(x, y, count) {
