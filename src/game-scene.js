@@ -183,8 +183,6 @@
       bullet.setDisplaySize(radius * 2, radius * 2).setTint(character.accent).setDepth(2);
       bullet.setData({ expiresAt: time + 1450, damage: this.stats.attack, target });
       this.physics.moveToObject(bullet, target, Data.player.bulletSpeed);
-      const baseScale = this.player.getData('baseScale');
-      this.tweens.add({ targets: this.player, scaleX: baseScale * 0.91, scaleY: baseScale * 1.09, duration: 45, yoyo: true, ease: 'Sine.out' });
     }
 
     closestEnemy() {
