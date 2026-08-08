@@ -17,11 +17,11 @@
       watermelon: { name: '西瓜', desc: '伤害更高 · 黑色种子', icon: '🍉', color: 0xe66a6f, accent: 0x453437, bulletSize: 12, damage: 2 }
     },
     enemies: [
-      { key: 'donut', color: 0xdf7897, hp: 2, speed: 84, radius: 23, score: 12, weight: 30 },
-      { key: 'macaron', color: 0x8ca8d8, hp: 1, speed: 122, radius: 20, score: 8, weight: 25 },
-      { key: 'cookie', color: 0xc39a70, hp: 3, speed: 68, radius: 25, score: 18, weight: 20 },
-      { key: 'icecream', color: 0xd29ab4, hp: 2, speed: 96, radius: 25, score: 14, weight: 15 },
-      { key: 'cupcake', color: 0xc97594, hp: 4, speed: 58, radius: 28, score: 25, weight: 10 }
+      { key: 'donut', color: 0xdf7897, hp: 3, speed: 84, radius: 23, score: 12, weight: 30 },
+      { key: 'macaron', color: 0x8ca8d8, hp: 2, speed: 122, radius: 20, score: 8, weight: 25 },
+      { key: 'cookie', color: 0xc39a70, hp: 5, speed: 68, radius: 25, score: 18, weight: 20 },
+      { key: 'icecream', color: 0xd29ab4, hp: 3, speed: 96, radius: 25, score: 14, weight: 15 },
+      { key: 'cupcake', color: 0xc97594, hp: 6, speed: 58, radius: 28, score: 25, weight: 10 }
     ]
   };
 }());

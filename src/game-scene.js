@@ -272,7 +272,9 @@
     handleBulletHit(bullet, enemy) {
       if (!bullet.active || !enemy.active) return;
       bullet.destroy();
-      const hp = enemy.getData('hp') - bullet.getData('damage');
+      const currentHp = Number(enemy.getData('hp')) || 0;
+      const damage = Number(bullet.getData('damage')) || 1;
+      const hp = Math.max(0, currentHp - damage);
       enemy.setData('hp', hp).setTintFill(0xffffff);
       this.time.delayedCall(65, () => {
         if (!enemy.active) return;
@@ -289,8 +291,9 @@
     drawEnemyHealthBar(enemy) {
       const healthBar = enemy.getData('healthBar');
       if (!healthBar || !enemy.active) return;
-      const maxHp = enemy.getData('maxHp');
-      const ratio = Phaser.Math.Clamp(enemy.getData('hp') / maxHp, 0, 1);
+      const maxHp = Number(enemy.getData('maxHp')) || 1;
+      const hp = Number(enemy.getData('hp')) || 0;
+      const ratio = Phaser.Math.Clamp(hp / maxHp, 0, 1);
       const width = Math.max(34, enemy.displayWidth * 0.76);
       const height = 6;
       const x = enemy.x - width * 0.5;
