@@ -8,6 +8,17 @@
       this.running = false;
     }
 
+    preload() {
+      ['right', 'up', 'down'].forEach(direction => {
+        [1, 2, 3].forEach(frame => {
+          this.load.image(
+            `strawberry-${direction}-${frame}`,
+            `assets/characters/strawberry/strawberry-${direction}-${frame}.png`
+          );
+        });
+      });
+    }
+
     createTextures() {
       const makeCircleTexture = (key, color, radius, outline) => {
         if (this.textures.exists(key)) return;
@@ -34,9 +45,23 @@
       }
     }
 
+    createStrawberryAnimations() {
+      ['right', 'up', 'down'].forEach(direction => {
+        const key = `strawberry-walk-${direction}`;
+        if (this.anims.exists(key)) return;
+        this.anims.create({
+          key,
+          frames: [1, 2, 3, 2].map(frame => ({ key: `strawberry-${direction}-${frame}` })),
+          frameRate: 9,
+          repeat: -1
+        });
+      });
+    }
+
     create(data) {
       this.characterKey = data.characterKey || this.characterKey;
       this.createTextures();
+      this.createStrawberryAnimations();
       this.physics.world.setBounds(0, 0, Data.world.width, Data.world.height);
       this.add.tileSprite(0, 0, Data.world.width, Data.world.height, 'ground').setOrigin(0);
 
@@ -49,9 +74,17 @@
       this.spawnAccumulator = 0;
       this.running = true;
 
-      this.player = this.physics.add.sprite(Data.world.width / 2, Data.world.height / 2, `player-${this.characterKey}`);
-      this.player.setCircle(21, 3, 3).setCollideWorldBounds(true).setDepth(3);
-      this.player.setData('baseScale', 1);
+      const strawberry = this.characterKey === 'strawberry';
+      this.strawberryDirection = 'down';
+      this.player = this.physics.add.sprite(
+        Data.world.width / 2,
+        Data.world.height / 2,
+        strawberry ? 'strawberry-down-2' : `player-${this.characterKey}`
+      );
+      if (strawberry) this.player.setDisplaySize(96, 96).setCircle(60, 68, 60);
+      else this.player.setCircle(21, 3, 3);
+      this.player.setCollideWorldBounds(true).setDepth(3);
+      this.player.setData('baseScale', this.player.scaleX);
       this.cameras.main.startFollow(this.player, true, 1, 1);
       this.cameras.main.setBounds(0, 0, Data.world.width, Data.world.height);
       this.cameras.main.setBackgroundColor('#f4ede5');
@@ -105,7 +138,23 @@
       const direction = new Phaser.Math.Vector2(x, y).normalize().scale(Data.player.speed);
       this.player.setVelocity(direction.x, direction.y);
       const moving = x !== 0 || y !== 0;
-      this.player.setRotation(moving ? Phaser.Math.Angle.Between(0, 0, x, y) * 0.06 : 0);
+      if (this.characterKey !== 'strawberry') {
+        this.player.setRotation(moving ? Phaser.Math.Angle.Between(0, 0, x, y) * 0.06 : 0);
+        return;
+      }
+
+      this.player.setRotation(0);
+      if (moving) {
+        if (Math.abs(x) > Math.abs(y)) this.strawberryDirection = x < 0 ? 'left' : 'right';
+        else this.strawberryDirection = y < 0 ? 'up' : 'down';
+        const animationDirection = this.strawberryDirection === 'left' ? 'right' : this.strawberryDirection;
+        this.player.setFlipX(this.strawberryDirection === 'left');
+        this.player.play(`strawberry-walk-${animationDirection}`, true);
+      } else {
+        this.player.stop();
+        const idleDirection = this.strawberryDirection === 'left' ? 'right' : this.strawberryDirection;
+        this.player.setTexture(`strawberry-${idleDirection}-2`).setFlipX(this.strawberryDirection === 'left');
+      }
     }
 
     moveEnemies(delta) {
@@ -128,7 +177,8 @@
       bullet.setDisplaySize(radius * 2, radius * 2).setTint(character.accent).setDepth(2);
       bullet.setData({ expiresAt: time + 1450, damage: this.stats.attack });
       this.physics.moveToObject(bullet, target, Data.player.bulletSpeed);
-      this.tweens.add({ targets: this.player, scaleX: 0.91, scaleY: 1.09, duration: 45, yoyo: true, ease: 'Sine.out' });
+      const baseScale = this.player.getData('baseScale');
+      this.tweens.add({ targets: this.player, scaleX: baseScale * 0.91, scaleY: baseScale * 1.09, duration: 45, yoyo: true, ease: 'Sine.out' });
     }
 
     closestEnemy() {
@@ -264,7 +314,8 @@
       this.stats.fireDelay = Math.max(110, this.stats.fireDelay - 6);
       this.cameras.main.flash(150, 255, 239, 181, false);
       this.cameras.main.shake(90, 0.003);
-      this.tweens.add({ targets: this.player, scale: 1.35, duration: 130, yoyo: true, ease: 'Back.out' });
+      const baseScale = this.player.getData('baseScale');
+      this.tweens.add({ targets: this.player, scaleX: baseScale * 1.35, scaleY: baseScale * 1.35, duration: 130, yoyo: true, ease: 'Back.out' });
     }
 
     handlePlayerHit(player, enemy) {
