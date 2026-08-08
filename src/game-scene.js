@@ -162,6 +162,11 @@
       this.enemies.getChildren().forEach(enemy => {
         if (!enemy.active) return;
         const type = enemy.getData('type');
+        const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+        if (distance > Data.performance.enemyDespawnDistance) {
+          this.removeEnemy(enemy);
+          return;
+        }
         this.physics.moveToObject(enemy, this.player, type.speed);
         this.drawEnemyHealthBar(enemy);
       });
@@ -176,7 +181,7 @@
       const bullet = this.bullets.create(this.player.x, this.player.y, 'spark');
       const radius = character.bulletSize * this.stats.bulletMultiplier;
       bullet.setDisplaySize(radius * 2, radius * 2).setTint(character.accent).setDepth(2);
-      bullet.setData({ expiresAt: time + 1450, damage: this.stats.attack });
+      bullet.setData({ expiresAt: time + 1450, damage: this.stats.attack, target });
       this.physics.moveToObject(bullet, target, Data.player.bulletSpeed);
       const baseScale = this.player.getData('baseScale');
       this.tweens.add({ targets: this.player, scaleX: baseScale * 0.91, scaleY: baseScale * 1.09, duration: 45, yoyo: true, ease: 'Sine.out' });
@@ -200,19 +205,21 @@
           bullet.destroy();
           return;
         }
-        for (const enemy of this.enemies.getChildren()) {
-          if (!enemy.active) continue;
-          const reach = enemy.getData('hitRadius') + bullet.displayWidth * 0.5;
-          if (Phaser.Math.Distance.Between(bullet.x, bullet.y, enemy.x, enemy.y) <= reach) {
-            this.handleBulletHit(bullet, enemy);
-            break;
-          }
+        const target = bullet.getData('target');
+        if (!target?.active) {
+          bullet.destroy();
+          return;
         }
+        this.physics.moveToObject(bullet, target, Data.player.bulletSpeed);
+        const reach = target.getData('hitRadius') + bullet.displayWidth * 0.5;
+        if (Phaser.Math.Distance.Between(bullet.x, bullet.y, target.x, target.y) <= reach) this.handleBulletHit(bullet, target);
       });
     }
 
     spawnWave() {
-      const count = 1 + Math.floor((this.stats.level - 1) / 3);
+      const available = this.getEnemyLimit() - this.activeEnemyCount();
+      if (available <= 0) return;
+      const count = Math.min(available, 1 + Math.floor((this.stats.level - 1) / 3));
       for (let index = 0; index < count; index += 1) {
         this.time.delayedCall(index * 75, () => {
           if (this.running) this.spawnEnemy(this.stats.level >= 5 && Math.random() < 0.12);
@@ -221,6 +228,7 @@
     }
 
     spawnEnemy(isElite) {
+      if (this.activeEnemyCount() >= this.getEnemyLimit()) return;
       const type = this.pickEnemyType();
       const camera = this.cameras.main.worldView;
       const margin = 75;
@@ -252,11 +260,21 @@
         hitRadius: type.radius * visualMultiplier,
         elite: isElite,
         baseScale,
-        healthBar
+        healthBar,
+        healthVisibleUntil: 0
       });
       if (isElite) enemy.setTint(0xffd166);
       this.tweens.add({ targets: enemy, scaleX: baseScale * 1.045, scaleY: baseScale * 0.965, angle: 3, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       this.drawEnemyHealthBar(enemy);
+    }
+
+    activeEnemyCount() {
+      return this.enemies.getChildren().reduce((count, enemy) => count + Number(enemy.active), 0);
+    }
+
+    getEnemyLimit() {
+      const levelBonus = (this.stats.level - 1) * Data.performance.enemyCapPerLevel;
+      return Math.min(Data.performance.maxActiveEnemies, Data.performance.baseActiveEnemies + levelBonus);
     }
 
     pickEnemyType() {
@@ -275,7 +293,7 @@
       const currentHp = Number(enemy.getData('hp')) || 0;
       const damage = Number(bullet.getData('damage')) || 1;
       const hp = Math.max(0, currentHp - damage);
-      enemy.setData('hp', hp).setTintFill(0xffffff);
+      enemy.setData('hp', hp).setData('healthVisibleUntil', this.time.now + Data.performance.healthBarDuration).setTintFill(0xffffff);
       this.time.delayedCall(65, () => {
         if (!enemy.active) return;
         if (enemy.getData('elite')) enemy.setTint(0xffd166);
@@ -291,6 +309,10 @@
     drawEnemyHealthBar(enemy) {
       const healthBar = enemy.getData('healthBar');
       if (!healthBar || !enemy.active) return;
+      const nearPlayer = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y) <= Data.performance.healthBarRange;
+      const recentlyHit = this.time.now < enemy.getData('healthVisibleUntil');
+      healthBar.setVisible(nearPlayer || recentlyHit);
+      if (!nearPlayer && !recentlyHit) return;
       const maxHp = Number(enemy.getData('maxHp')) || 1;
       const hp = Number(enemy.getData('hp')) || 0;
       const ratio = Phaser.Math.Clamp(hp / maxHp, 0, 1);
@@ -315,6 +337,13 @@
       enemy.getData('healthBar')?.destroy();
       enemy.destroy();
       this.publishHud();
+    }
+
+    removeEnemy(enemy) {
+      if (!enemy.active) return;
+      this.tweens.killTweensOf(enemy);
+      enemy.getData('healthBar')?.destroy();
+      enemy.destroy();
     }
 
     dropXp(x, y, count) {

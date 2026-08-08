@@ -3,6 +3,14 @@
   window.GameData = {
     viewport,
     world: { width: viewport.width * 9, height: viewport.height * 9 },
+    performance: {
+      baseActiveEnemies: 32,
+      enemyCapPerLevel: 2,
+      maxActiveEnemies: 54,
+      enemyDespawnDistance: 1728,
+      healthBarRange: 320,
+      healthBarDuration: 900
+    },
     player: {
       speed: 250,
       maxHp: 3,
