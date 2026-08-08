@@ -8,6 +8,8 @@
   let selectedCharacter = null;
   let game;
 
+  window.GameInput = { x: 0, y: 0 };
+
   const fields = {
     level: document.getElementById('level-display'), attack: document.getElementById('attack-display'),
     hp: document.getElementById('hp-display'), score: document.getElementById('score-display'),
@@ -44,6 +46,44 @@
     });
     select.appendChild(button);
   });
+
+  const moveStick = document.getElementById('move-stick');
+  const moveKnob = document.getElementById('move-knob');
+  let activePointerId = null;
+
+  function updateMoveStick(event) {
+    const rect = moveStick.getBoundingClientRect();
+    const limit = rect.width * 0.29;
+    let x = event.clientX - (rect.left + rect.width / 2);
+    let y = event.clientY - (rect.top + rect.height / 2);
+    const distance = Math.hypot(x, y);
+    if (distance > limit) { x = (x / distance) * limit; y = (y / distance) * limit; }
+    window.GameInput.x = x / limit;
+    window.GameInput.y = y / limit;
+    moveKnob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+    moveStick.setAttribute('aria-valuenow', Math.round(Math.hypot(window.GameInput.x, window.GameInput.y) * 100));
+  }
+
+  function releaseMoveStick() {
+    activePointerId = null;
+    window.GameInput.x = 0;
+    window.GameInput.y = 0;
+    moveKnob.style.transform = 'translate(-50%, -50%)';
+    moveStick.setAttribute('aria-valuenow', '0');
+  }
+
+  moveStick.addEventListener('pointerdown', event => {
+    activePointerId = event.pointerId;
+    moveStick.setPointerCapture(event.pointerId);
+    updateMoveStick(event);
+  });
+  moveStick.addEventListener('pointermove', event => {
+    if (event.pointerId === activePointerId) updateMoveStick(event);
+  });
+  moveStick.addEventListener('pointerup', event => {
+    if (event.pointerId === activePointerId) releaseMoveStick();
+  });
+  moveStick.addEventListener('pointercancel', releaseMoveStick);
 
   function bootGame(characterKey) {
     menu.classList.add('hidden');
