@@ -1,6 +1,8 @@
 (function () {
+  const viewport = { width: 960, height: 720 };
   window.GameData = {
-    world: { width: 7200, height: 5400 },
+    viewport,
+    world: { width: viewport.width * 9, height: viewport.height * 9 },
     player: {
       speed: 250,
       maxHp: 3,
