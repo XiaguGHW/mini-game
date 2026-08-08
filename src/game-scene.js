@@ -93,7 +93,6 @@
 
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D' });
-      this.physics.add.overlap(this.bullets, this.enemies, this.handleBulletHit, undefined, this);
       this.physics.add.overlap(this.player, this.enemies, this.handlePlayerHit, undefined, this);
       this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
       this.publishHud();
@@ -164,6 +163,7 @@
         if (!enemy.active) return;
         const type = enemy.getData('type');
         this.physics.moveToObject(enemy, this.player, type.speed);
+        this.drawEnemyHealthBar(enemy);
       });
     }
 
@@ -195,7 +195,19 @@
 
     updateBullets(time) {
       this.bullets.getChildren().forEach(bullet => {
-        if (bullet.active && bullet.getData('expiresAt') <= time) bullet.destroy();
+        if (!bullet.active) return;
+        if (bullet.getData('expiresAt') <= time) {
+          bullet.destroy();
+          return;
+        }
+        for (const enemy of this.enemies.getChildren()) {
+          if (!enemy.active) continue;
+          const reach = enemy.getData('hitRadius') + bullet.displayWidth * 0.5;
+          if (Phaser.Math.Distance.Between(bullet.x, bullet.y, enemy.x, enemy.y) <= reach) {
+            this.handleBulletHit(bullet, enemy);
+            break;
+          }
+        }
       });
     }
 
@@ -231,14 +243,20 @@
         .setDepth(2)
         .setAngle(-3);
       const baseScale = enemy.scaleX;
+      const maxHp = Math.ceil(levelHp * eliteMultiplier);
+      const healthBar = this.add.graphics().setDepth(4);
       enemy.setData({
         type: { ...type, speed: type.speed * (isElite ? 1.15 : 1), score: Math.round(type.score * eliteMultiplier) },
-        hp: Math.ceil(levelHp * eliteMultiplier),
+        hp: maxHp,
+        maxHp,
+        hitRadius: type.radius * visualMultiplier,
         elite: isElite,
-        baseScale
+        baseScale,
+        healthBar
       });
       if (isElite) enemy.setTint(0xffd166);
       this.tweens.add({ targets: enemy, scaleX: baseScale * 1.045, scaleY: baseScale * 0.965, angle: 3, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      this.drawEnemyHealthBar(enemy);
     }
 
     pickEnemyType() {
@@ -263,8 +281,24 @@
       });
       const baseScale = enemy.getData('baseScale');
       this.tweens.add({ targets: enemy, scaleX: baseScale * 0.78, scaleY: baseScale * 0.78, duration: 50, yoyo: true, ease: 'Quad.out' });
+      this.drawEnemyHealthBar(enemy);
       this.createBurst(enemy.x, enemy.y, enemy.getData('type').color, 6);
       if (hp <= 0) this.killEnemy(enemy);
+    }
+
+    drawEnemyHealthBar(enemy) {
+      const healthBar = enemy.getData('healthBar');
+      if (!healthBar || !enemy.active) return;
+      const maxHp = enemy.getData('maxHp');
+      const ratio = Phaser.Math.Clamp(enemy.getData('hp') / maxHp, 0, 1);
+      const width = Math.max(34, enemy.displayWidth * 0.76);
+      const height = 6;
+      const x = enemy.x - width * 0.5;
+      const y = enemy.y - enemy.displayHeight * 0.62;
+      healthBar.clear();
+      healthBar.fillStyle(0xffffff, 0.92).fillRoundedRect(x - 1, y - 1, width + 2, height + 2, 4);
+      healthBar.fillStyle(0x705c5d, 0.8).fillRoundedRect(x, y, width, height, 3);
+      if (ratio > 0) healthBar.fillStyle(0xd7747e, 1).fillRoundedRect(x + 1, y + 1, Math.max(2, (width - 2) * ratio), height - 2, 2);
     }
 
     killEnemy(enemy) {
@@ -275,6 +309,7 @@
       this.createBurst(enemy.x, enemy.y, type.color, 14);
       this.dropXp(enemy.x, enemy.y, Math.max(1, Math.ceil(type.score / 10)));
       this.tweens.killTweensOf(enemy);
+      enemy.getData('healthBar')?.destroy();
       enemy.destroy();
       this.publishHud();
     }
@@ -363,6 +398,7 @@
 
     shutdown() {
       this.tweens.killAll();
+      this.enemies?.getChildren().forEach(enemy => enemy.getData('healthBar')?.destroy());
       this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     }
   }
