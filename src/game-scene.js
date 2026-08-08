@@ -171,13 +171,14 @@
       const levelHp = type.hp + Math.floor((this.stats.level - 1) / 4);
       const eliteMultiplier = isElite ? 1.6 : 1;
       const enemy = this.enemies.create(x, y, `enemy-${type.key}`);
-      enemy.setCircle(type.radius - 2, 4, 4).setDepth(2).setScale(isElite ? 1.25 : 1).setData({
+      const baseScale = isElite ? 1.25 : 1;
+      enemy.setCircle(type.radius - 2, 4, 4).setDepth(2).setScale(baseScale).setData({
         type: { ...type, speed: type.speed * (isElite ? 1.15 : 1), score: Math.round(type.score * eliteMultiplier) },
         hp: Math.ceil(levelHp * eliteMultiplier),
         elite: isElite
       });
       if (isElite) enemy.setTint(0xffd166);
-      this.tweens.add({ targets: enemy, scaleX: 1.06, scaleY: 0.94, duration: 480, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: enemy, scaleX: baseScale * 1.06, scaleY: baseScale * 0.94, duration: 480, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     }
 
     pickEnemyType() {
